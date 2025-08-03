@@ -256,17 +256,6 @@ const App = () => {
             </div>
             
             <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="text-neutral-300 border-neutral-700 text-sm px-3">
-                Balance: $12,450.50
-              </Badge>
-              <Button
-                onClick={refreshPrices}
-                disabled={refreshingPrices}
-                size="sm"
-                className="bg-neutral-700 hover:bg-neutral-600 text-white px-3"
-              >
-                <RotateCw className={`w-4 h-4 ${refreshingPrices ? 'animate-spin' : ''}`} />
-              </Button>
               {settings.enable_ai_signals && (
                 <Button
                   onClick={generateAiSignals}
