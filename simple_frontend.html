@@ -412,7 +412,7 @@
         // Load trades
         async function loadTrades() {
             try {
-                const response = await fetch('http://localhost:8001/api/trades');
+                const response = await fetch(`${BACKEND_URL}/api/trades`);
                 const data = await response.json();
                 displayTrades(data.trades);
             } catch (error) {
