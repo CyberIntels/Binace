@@ -17,8 +17,15 @@ if not exist "backend\server.py" (
 
 REM Check if setup was run
 if not exist "backend\venv\Scripts\python.exe" (
-    echo ERROR: Virtual environment not found
-    echo Please run simple_setup.bat first
+    echo.
+    echo ❌ ERROR: Приложение еще не настроено!
+    echo.
+    echo Пожалуйста, сначала запустите:
+    echo    simple_setup.bat
+    echo.
+    echo А затем повторите:  
+    echo    simple_start.bat
+    echo.
     pause
     exit /b 1
 )
