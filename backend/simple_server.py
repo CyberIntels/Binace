@@ -12,7 +12,17 @@ import uuid
 from typing import Optional, List
 import os
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize data on startup"""
+    await fetch_crypto_prices()
+    print("🚀 Simple Binance Trader API started!")
+    yield
+    print("🔥 Simple Binance Trader API stopped!")
+
+app = FastAPI(lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
