@@ -178,6 +178,8 @@ async def update_settings(new_settings: dict):
 
 @app.post("/api/trade/{pair}")
 async def execute_trade(pair: str, side: str):
+    global active_trades
+    
     if pair not in CRYPTO_PAIRS:
         return JSONResponse(status_code=404, content={"error": "Pair not found"})
     
