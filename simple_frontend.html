@@ -262,10 +262,13 @@
             connectWebSocket();
         });
 
+        // Backend URL - use the external URL for API calls
+        const BACKEND_URL = 'https://7f2ff7e3-cef4-4159-8b7f-c2fcce433756.preview.emergentagent.com';
+        
         // Load pairs from API
         async function loadPairs() {
             try {
-                const response = await fetch('http://localhost:8001/api/pairs');
+                const response = await fetch(`${BACKEND_URL}/api/pairs`);
                 const data = await response.json();
                 pairs = data.pairs;
                 displayPairs();
