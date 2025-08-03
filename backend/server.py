@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import uuid
 from typing import Optional, List
 import os
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 app = FastAPI()
 
@@ -30,12 +31,12 @@ db = client.binance_trader
 
 # Mock crypto pairs with realistic prices
 CRYPTO_PAIRS = {
-    "BTCUSDT": {"symbol": "BTC/USDT", "price": 43250.50, "change": 2.45, "volume": 125000000},
-    "ETHUSDT": {"symbol": "ETH/USDT", "price": 2650.75, "change": -1.23, "volume": 89000000},
-    "BNBUSDT": {"symbol": "BNB/USDT", "price": 315.20, "change": 0.85, "volume": 45000000},
-    "ADAUSDT": {"symbol": "ADA/USDT", "price": 0.4856, "change": 3.21, "volume": 28000000},
-    "SOLUSDT": {"symbol": "SOL/USDT", "price": 98.45, "change": -2.10, "volume": 67000000},
-    "DOTUSDT": {"symbol": "DOT/USDT", "price": 7.85, "change": 1.45, "volume": 23000000}
+    "BTCUSDT": {"symbol": "BTC/USDT", "price": 43250.50, "change": 2.45, "volume": 125000000, "high24h": 44100.00, "low24h": 42800.00},
+    "ETHUSDT": {"symbol": "ETH/USDT", "price": 2650.75, "change": -1.23, "volume": 89000000, "high24h": 2720.50, "low24h": 2580.25},
+    "BNBUSDT": {"symbol": "BNB/USDT", "price": 315.20, "change": 0.85, "volume": 45000000, "high24h": 325.80, "low24h": 308.90},
+    "ADAUSDT": {"symbol": "ADA/USDT", "price": 0.4856, "change": 3.21, "volume": 28000000, "high24h": 0.5120, "low24h": 0.4650},
+    "SOLUSDT": {"symbol": "SOL/USDT", "price": 98.45, "change": -2.10, "volume": 67000000, "high24h": 105.20, "low24h": 95.80},
+    "DOTUSDT": {"symbol": "DOT/USDT", "price": 7.85, "change": 1.45, "volume": 23000000, "high24h": 8.15, "low24h": 7.60}
 }
 
 # WebSocket connections
@@ -66,6 +67,10 @@ class TradeSettings(BaseModel):
     stop_loss: float = 3
     timeframe: str = "5m"
     activation_distance: float = 1.5
+    openai_api_key: str = ""
+    ai_model: str = "gpt-4o"
+    ai_provider: str = "openai"
+    enable_ai_signals: bool = False
 
 class TradeOrder(BaseModel):
     id: str
@@ -76,10 +81,85 @@ class TradeOrder(BaseModel):
     market_type: str  # "spot" or "futures"
     timestamp: datetime
     status: str = "filled"
+    ai_signal: Optional[str] = None
+
+class AISignal(BaseModel):
+    pair: str
+    signal: str  # "BUY", "SELL", "HOLD"
+    confidence: float
+    analysis: str
+    timestamp: datetime
 
 # Global settings
 current_settings = TradeSettings()
 active_trades = []
+ai_signals = {}
+
+async def get_ai_trading_signal(pair: str, price_data: dict) -> Optional[AISignal]:
+    """Get trading signal from AI"""
+    if not current_settings.openai_api_key or not current_settings.enable_ai_signals:
+        return None
+    
+    try:
+        # Create AI chat instance
+        chat = LlmChat(
+            api_key=current_settings.openai_api_key,
+            session_id=f"trading-{pair}-{int(time.time())}",
+            system_message="You are a professional crypto trading analyst. Provide concise trading signals based on market data."
+        ).with_model(current_settings.ai_provider, current_settings.ai_model)
+        
+        # Prepare market analysis prompt
+        analysis_prompt = f"""
+        Analyze the current market data for {pair}:
+        
+        Current Price: ${price_data['price']}
+        24h Change: {price_data['change']}%
+        24h High: ${price_data['high24h']}
+        24h Low: ${price_data['low24h']}
+        Volume: ${price_data['volume']:,}
+        
+        Based on this data, provide:
+        1. Trading signal: BUY, SELL, or HOLD
+        2. Confidence level (1-100)
+        3. Brief reason (max 50 words)
+        
+        Format your response as JSON:
+        {{"signal": "BUY/SELL/HOLD", "confidence": 85, "analysis": "Brief analysis reason"}}
+        """
+        
+        user_message = UserMessage(text=analysis_prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse AI response
+        try:
+            ai_data = json.loads(response.strip())
+            return AISignal(
+                pair=pair,
+                signal=ai_data.get("signal", "HOLD"),
+                confidence=float(ai_data.get("confidence", 50)),
+                analysis=ai_data.get("analysis", "No analysis available"),
+                timestamp=datetime.now()
+            )
+        except json.JSONDecodeError:
+            # Fallback parsing if AI doesn't return proper JSON
+            if "BUY" in response.upper():
+                signal = "BUY"
+            elif "SELL" in response.upper():
+                signal = "SELL"
+            else:
+                signal = "HOLD"
+                
+            return AISignal(
+                pair=pair,
+                signal=signal,
+                confidence=50.0,
+                analysis=response[:100],
+                timestamp=datetime.now()
+            )
+    
+    except Exception as e:
+        print(f"AI Signal Error for {pair}: {str(e)}")
+        return None
 
 @app.get("/api/health")
 async def health_check():
@@ -89,15 +169,32 @@ async def health_check():
 async def get_crypto_pairs():
     return {"pairs": CRYPTO_PAIRS}
 
+@app.get("/api/pairs/all")
+async def get_all_pairs_with_signals():
+    """Get all pairs with current AI signals"""
+    pairs_with_signals = {}
+    
+    for pair_key, pair_data in CRYPTO_PAIRS.items():
+        pairs_with_signals[pair_key] = {
+            **pair_data,
+            "ai_signal": ai_signals.get(pair_key, None)
+        }
+    
+    return {"pairs": pairs_with_signals}
+
 @app.get("/api/settings")
 async def get_settings():
-    return current_settings.dict()
+    # Don't expose the API key in responses
+    settings_dict = current_settings.dict()
+    if settings_dict.get("openai_api_key"):
+        settings_dict["openai_api_key"] = "***HIDDEN***"
+    return settings_dict
 
 @app.post("/api/settings")
 async def update_settings(settings: TradeSettings):
     global current_settings
     current_settings = settings
-    return {"status": "updated", "settings": settings.dict()}
+    return {"status": "updated", "settings": "Settings updated successfully"}
 
 @app.post("/api/trade/{pair}")
 async def execute_trade(pair: str, side: str, market_type: str = "spot"):
@@ -111,6 +208,12 @@ async def execute_trade(pair: str, side: str, market_type: str = "spot"):
     slippage = random.uniform(-0.001, 0.001)
     execution_price = current_price * (1 + slippage)
     
+    # Get AI signal for this trade
+    ai_signal_text = None
+    if current_settings.enable_ai_signals and pair in ai_signals:
+        signal_data = ai_signals[pair]
+        ai_signal_text = f"{signal_data['signal']} ({signal_data['confidence']}%)"
+    
     trade = TradeOrder(
         id=trade_id,
         pair=pair,
@@ -118,7 +221,8 @@ async def execute_trade(pair: str, side: str, market_type: str = "spot"):
         amount=current_settings.trade_amount,
         price=execution_price,
         market_type=market_type,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
+        ai_signal=ai_signal_text
     )
     
     active_trades.append(trade.dict())
@@ -165,6 +269,40 @@ async def emergency_sell():
 async def get_active_trades():
     return {"trades": active_trades}
 
+@app.get("/api/ai-signals")
+async def get_ai_signals():
+    """Get current AI trading signals for all pairs"""
+    return {"signals": ai_signals}
+
+@app.post("/api/generate-ai-signals")
+async def generate_ai_signals():
+    """Generate AI signals for all pairs"""
+    if not current_settings.openai_api_key or not current_settings.enable_ai_signals:
+        return JSONResponse(status_code=400, content={"error": "AI signals not configured"})
+    
+    generated_signals = {}
+    
+    for pair_key, pair_data in CRYPTO_PAIRS.items():
+        signal = await get_ai_trading_signal(pair_key, pair_data)
+        if signal:
+            generated_signals[pair_key] = {
+                "signal": signal.signal,
+                "confidence": signal.confidence,
+                "analysis": signal.analysis,
+                "timestamp": signal.timestamp.isoformat()
+            }
+    
+    # Update global signals
+    ai_signals.update(generated_signals)
+    
+    # Broadcast new signals
+    await manager.broadcast({
+        "type": "ai_signals_updated",
+        "signals": generated_signals
+    })
+    
+    return {"status": "success", "signals": generated_signals}
+
 @app.websocket("/api/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -176,11 +314,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 change_percent = random.uniform(-0.5, 0.5)
                 new_price = pair_data["price"] * (1 + change_percent / 100)
                 CRYPTO_PAIRS[pair_key]["price"] = round(new_price, 8)
-                CRYPTO_PAIRS[pair_key]["change"] = round(change_percent, 2)
+                CRYPTO_PAIRS[pair_key]["change"] = round(
+                    CRYPTO_PAIRS[pair_key]["change"] + random.uniform(-0.1, 0.1), 2
+                )
+                
+                # Update 24h high/low occasionally
+                if random.random() < 0.1:  # 10% chance
+                    if new_price > pair_data["high24h"]:
+                        CRYPTO_PAIRS[pair_key]["high24h"] = new_price
+                    elif new_price < pair_data["low24h"]:
+                        CRYPTO_PAIRS[pair_key]["low24h"] = new_price
             
             await manager.broadcast({
                 "type": "price_update",
-                "data": CRYPTO_PAIRS
+                "data": CRYPTO_PAIRS,
+                "ai_signals": ai_signals
             })
             
             await asyncio.sleep(1)  # Update every second
