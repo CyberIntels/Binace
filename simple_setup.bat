@@ -16,7 +16,25 @@ if not exist "backend\server.py" (
     exit /b 1
 )
 
-echo Setting up Python backend...
+REM Check for Node.js first
+echo Проверяем Node.js...
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo ❌ Node.js не найден!
+    echo.
+    echo Пожалуйста:
+    echo 1. Установите Node.js с https://nodejs.org
+    echo 2. Перезапустите командную строку
+    echo 3. Запустите этот скрипт снова
+    echo.
+    pause
+    exit /b 1
+) else (
+    for /f "tokens=*" %%i in ('node --version 2^>^&1') do echo ✅ Node.js: %%i
+)
+
+echo Настраиваем Python backend...
 cd backend
 
 REM Clean up any existing venv
