@@ -7,7 +7,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Switch } from './components/ui/switch';
-import { AlertTriangle, TrendingUp, TrendingDown, Zap, Activity, Settings, DollarSign, Bot, Brain, Eye, Refresh, Clock } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown, Zap, Activity, Settings, DollarSign, Bot, Brain, Eye, RotateCw, Clock } from 'lucide-react';
 import './App.css';
 
 const App = () => {
