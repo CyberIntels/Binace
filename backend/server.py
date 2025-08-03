@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 import uuid
 from typing import Optional, List
 import os
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# AI imports removed for simplified version
+# from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 app = FastAPI()
 
