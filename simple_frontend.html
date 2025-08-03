@@ -372,7 +372,7 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:8001/api/trade/${selectedPair}?side=${side}`, {
+                const response = await fetch(`${BACKEND_URL}/api/trade/${selectedPair}?side=${side}`, {
                     method: 'POST'
                 });
                 const result = await response.json();
