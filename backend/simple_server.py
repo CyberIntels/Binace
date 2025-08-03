@@ -141,6 +141,12 @@ class TradeOrder(BaseModel):
     timestamp: datetime
     status: str = "filled"
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize data on startup"""
+    await fetch_crypto_prices()
+    print("🚀 Simple Binance Trader API started!")
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
