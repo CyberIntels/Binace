@@ -178,66 +178,35 @@ active_trades = []
 ai_signals = {}
 
 async def get_ai_trading_signal(pair: str, price_data: dict) -> Optional[AISignal]:
-    """Get trading signal from AI"""
-    if not current_settings.openai_api_key or not current_settings.enable_ai_signals:
+    """Get trading signal from AI - Simplified version without AI integration"""
+    if not current_settings.enable_ai_signals:
         return None
     
+    # Simplified mock AI signal generation based on price change
     try:
-        # Create AI chat instance
-        chat = LlmChat(
-            api_key=current_settings.openai_api_key,
-            session_id=f"trading-{pair}-{int(time.time())}",
-            system_message="You are a professional crypto trading analyst. Provide concise trading signals based on market data."
-        ).with_model(current_settings.ai_provider, current_settings.ai_model)
+        price_change = price_data.get('change', 0)
         
-        # Prepare market analysis prompt
-        analysis_prompt = f"""
-        Analyze the current market data for {pair}:
+        # Simple logic based on price movement
+        if price_change > 2:
+            signal = "BUY"
+            confidence = min(75 + abs(price_change) * 2, 95)
+            analysis = f"Strong upward momentum with {price_change:.2f}% gain"
+        elif price_change < -2:
+            signal = "SELL"
+            confidence = min(75 + abs(price_change) * 2, 95)
+            analysis = f"Downward trend with {price_change:.2f}% decline"
+        else:
+            signal = "HOLD"
+            confidence = 60
+            analysis = f"Sideways movement with {price_change:.2f}% change"
         
-        Current Price: ${price_data['price']}
-        24h Change: {price_data['change']}%
-        24h High: ${price_data['high24h']}
-        24h Low: ${price_data['low24h']}
-        Volume: ${price_data['volume']:,}
-        
-        Based on this data, provide:
-        1. Trading signal: BUY, SELL, or HOLD
-        2. Confidence level (1-100)
-        3. Brief reason (max 50 words)
-        
-        Format your response as JSON:
-        {{"signal": "BUY/SELL/HOLD", "confidence": 85, "analysis": "Brief analysis reason"}}
-        """
-        
-        user_message = UserMessage(text=analysis_prompt)
-        response = await chat.send_message(user_message)
-        
-        # Parse AI response
-        try:
-            ai_data = json.loads(response.strip())
-            return AISignal(
-                pair=pair,
-                signal=ai_data.get("signal", "HOLD"),
-                confidence=float(ai_data.get("confidence", 50)),
-                analysis=ai_data.get("analysis", "No analysis available"),
-                timestamp=datetime.now()
-            )
-        except json.JSONDecodeError:
-            # Fallback parsing if AI doesn't return proper JSON
-            if "BUY" in response.upper():
-                signal = "BUY"
-            elif "SELL" in response.upper():
-                signal = "SELL"
-            else:
-                signal = "HOLD"
-                
-            return AISignal(
-                pair=pair,
-                signal=signal,
-                confidence=50.0,
-                analysis=response[:100],
-                timestamp=datetime.now()
-            )
+        return AISignal(
+            pair=pair,
+            signal=signal,
+            confidence=confidence,
+            analysis=analysis,
+            timestamp=datetime.now()
+        )
     
     except Exception as e:
         print(f"AI Signal Error for {pair}: {str(e)}")
