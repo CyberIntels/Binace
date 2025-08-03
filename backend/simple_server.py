@@ -108,8 +108,7 @@ def init_mock_data():
     print("✅ Initialized with mock data")
     return True
 
-# Initialize with data
-asyncio.create_task(fetch_crypto_prices())
+# Initialize with data - will be called on startup
 
 # WebSocket connections
 class ConnectionManager:
