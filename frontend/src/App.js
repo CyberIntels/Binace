@@ -265,7 +265,7 @@ const App = () => {
                 size="sm"
                 className="bg-neutral-700 hover:bg-neutral-600 text-white px-3"
               >
-                <Refresh className={`w-4 h-4 ${refreshingPrices ? 'animate-spin' : ''}`} />
+                <RotateCw className={`w-4 h-4 ${refreshingPrices ? 'animate-spin' : ''}`} />
               </Button>
               {settings.enable_ai_signals && (
                 <Button
