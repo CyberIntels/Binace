@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class BinanceTradingAPITester:
-    def __init__(self, base_url="https://0a99642f-b4bf-474d-9bca-06814fc7b936.preview.emergentagent.com"):
+    def __init__(self, base_url="https://3db2a2fa-2bff-4937-833b-3dcf4437ec0a.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
