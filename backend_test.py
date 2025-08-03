@@ -151,6 +151,12 @@ def main():
     tester.test_emergency_sell()
     tester.test_get_trades()  # Verify trades were cleared
     
+    # AI-related endpoints
+    tester.test_get_all_pairs_with_signals()
+    tester.test_get_ai_signals()
+    tester.test_ai_settings_update()
+    tester.test_generate_ai_signals_without_key()  # Should fail without proper API key
+    
     # Print final results
     print("\n" + "=" * 50)
     print(f"📊 Final Results: {tester.tests_passed}/{tester.tests_run} tests passed")
