@@ -7,6 +7,7 @@ import asyncio
 import json
 import random
 import time
+import requests
 from datetime import datetime, timedelta
 import uuid
 from typing import Optional, List
@@ -29,15 +30,64 @@ MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.binance_trader
 
-# Mock crypto pairs with realistic prices
-CRYPTO_PAIRS = {
-    "BTCUSDT": {"symbol": "BTC/USDT", "price": 43250.50, "change": 2.45, "volume": 125000000, "high24h": 44100.00, "low24h": 42800.00},
-    "ETHUSDT": {"symbol": "ETH/USDT", "price": 2650.75, "change": -1.23, "volume": 89000000, "high24h": 2720.50, "low24h": 2580.25},
-    "BNBUSDT": {"symbol": "BNB/USDT", "price": 315.20, "change": 0.85, "volume": 45000000, "high24h": 325.80, "low24h": 308.90},
-    "ADAUSDT": {"symbol": "ADA/USDT", "price": 0.4856, "change": 3.21, "volume": 28000000, "high24h": 0.5120, "low24h": 0.4650},
-    "SOLUSDT": {"symbol": "SOL/USDT", "price": 98.45, "change": -2.10, "volume": 67000000, "high24h": 105.20, "low24h": 95.80},
-    "DOTUSDT": {"symbol": "DOT/USDT", "price": 7.85, "change": 1.45, "volume": 23000000, "high24h": 8.15, "low24h": 7.60}
-}
+# Binance API settings
+BINANCE_API_URL = "https://api.binance.com/api/v3"
+CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "SOLUSDT", "DOTUSDT"]
+
+# Global data store
+CRYPTO_PAIRS = {}
+last_binance_update = 0
+
+async def fetch_binance_prices():
+    """Fetch real prices from Binance API"""
+    global CRYPTO_PAIRS, last_binance_update
+    
+    try:
+        # Get current prices for all symbols
+        price_response = requests.get(f"{BINANCE_API_URL}/ticker/price", timeout=5)
+        if price_response.status_code == 200:
+            prices = {item['symbol']: float(item['price']) for item in price_response.json()}
+        else:
+            print("Failed to fetch prices from Binance")
+            return False
+        
+        # Get 24hr ticker statistics
+        ticker_response = requests.get(f"{BINANCE_API_URL}/ticker/24hr", timeout=5)
+        if ticker_response.status_code == 200:
+            tickers = {item['symbol']: item for item in ticker_response.json()}
+        else:
+            print("Failed to fetch 24hr stats from Binance")
+            return False
+        
+        # Update our data
+        for symbol in CRYPTO_SYMBOLS:
+            if symbol in prices and symbol in tickers:
+                ticker = tickers[symbol]
+                
+                # Format symbol for display
+                base = symbol.replace('USDT', '')
+                display_symbol = f"{base}/USDT"
+                
+                CRYPTO_PAIRS[symbol] = {
+                    "symbol": display_symbol,
+                    "price": prices[symbol],
+                    "change": float(ticker['priceChangePercent']),
+                    "volume": float(ticker['quoteVolume']),
+                    "high24h": float(ticker['highPrice']),
+                    "low24h": float(ticker['lowPrice']),
+                    "lastUpdate": datetime.now().isoformat()
+                }
+        
+        last_binance_update = time.time()
+        print(f"✅ Updated prices from Binance API for {len(CRYPTO_PAIRS)} pairs")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error fetching Binance data: {str(e)}")
+        return False
+
+# Initialize with Binance data
+asyncio.create_task(fetch_binance_prices())
 
 # WebSocket connections
 class ConnectionManager:
@@ -71,6 +121,7 @@ class TradeSettings(BaseModel):
     ai_model: str = "gpt-4o"
     ai_provider: str = "openai"
     enable_ai_signals: bool = False
+    price_update_interval: int = 5  # seconds (1-3600)
 
 class TradeOrder(BaseModel):
     id: str
@@ -167,11 +218,17 @@ async def health_check():
 
 @app.get("/api/pairs")
 async def get_crypto_pairs():
+    """Get current pairs data"""
+    if not CRYPTO_PAIRS:
+        await fetch_binance_prices()
     return {"pairs": CRYPTO_PAIRS}
 
 @app.get("/api/pairs/all")
 async def get_all_pairs_with_signals():
     """Get all pairs with current AI signals"""
+    if not CRYPTO_PAIRS:
+        await fetch_binance_prices()
+        
     pairs_with_signals = {}
     
     for pair_key, pair_data in CRYPTO_PAIRS.items():
@@ -181,6 +238,20 @@ async def get_all_pairs_with_signals():
         }
     
     return {"pairs": pairs_with_signals}
+
+@app.post("/api/refresh-prices")
+async def refresh_binance_prices():
+    """Manually refresh prices from Binance"""
+    success = await fetch_binance_prices()
+    if success:
+        await manager.broadcast({
+            "type": "price_update",
+            "data": CRYPTO_PAIRS,
+            "ai_signals": ai_signals
+        })
+        return {"status": "success", "message": "Prices updated from Binance"}
+    else:
+        return JSONResponse(status_code=500, content={"error": "Failed to update prices"})
 
 @app.get("/api/settings")
 async def get_settings():
@@ -308,30 +379,21 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Send real-time price updates
-            for pair_key, pair_data in CRYPTO_PAIRS.items():
-                # Simulate price movement
-                change_percent = random.uniform(-0.5, 0.5)
-                new_price = pair_data["price"] * (1 + change_percent / 100)
-                CRYPTO_PAIRS[pair_key]["price"] = round(new_price, 8)
-                CRYPTO_PAIRS[pair_key]["change"] = round(
-                    CRYPTO_PAIRS[pair_key]["change"] + random.uniform(-0.1, 0.1), 2
-                )
-                
-                # Update 24h high/low occasionally
-                if random.random() < 0.1:  # 10% chance
-                    if new_price > pair_data["high24h"]:
-                        CRYPTO_PAIRS[pair_key]["high24h"] = new_price
-                    elif new_price < pair_data["low24h"]:
-                        CRYPTO_PAIRS[pair_key]["low24h"] = new_price
+            # Check if we need to update from Binance
+            current_time = time.time()
+            if current_time - last_binance_update > current_settings.price_update_interval:
+                await fetch_binance_prices()
             
+            # Broadcast current data
             await manager.broadcast({
                 "type": "price_update",
                 "data": CRYPTO_PAIRS,
-                "ai_signals": ai_signals
+                "ai_signals": ai_signals,
+                "update_interval": current_settings.price_update_interval
             })
             
-            await asyncio.sleep(1)  # Update every second
+            # Wait for the configured interval
+            await asyncio.sleep(current_settings.price_update_interval)
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)

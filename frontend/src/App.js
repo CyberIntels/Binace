@@ -7,7 +7,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
 import { Switch } from './components/ui/switch';
-import { AlertTriangle, TrendingUp, TrendingDown, Zap, Activity, Settings, DollarSign, Bot, Brain, Eye, Refresh } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown, Zap, Activity, Settings, DollarSign, Bot, Brain, Eye, Refresh, Clock } from 'lucide-react';
 import './App.css';
 
 const App = () => {
@@ -23,13 +23,15 @@ const App = () => {
     openai_api_key: '',
     ai_model: 'gpt-4o',
     ai_provider: 'openai',
-    enable_ai_signals: false
+    enable_ai_signals: false,
+    price_update_interval: 5
   });
   const [trades, setTrades] = useState([]);
   const [aiSignals, setAiSignals] = useState({});
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [generatingSignals, setGeneratingSignals] = useState(false);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -127,6 +129,24 @@ const App = () => {
     }
   };
 
+  const refreshPrices = async () => {
+    setRefreshingPrices(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/refresh-prices`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('Prices refreshed from Binance');
+      }
+    } catch (error) {
+      console.error('Failed to refresh prices:', error);
+    } finally {
+      setRefreshingPrices(false);
+    }
+  };
+
   const generateAiSignals = async () => {
     if (!settings.openai_api_key) {
       alert('Please set your OpenAI API key in settings first');
@@ -189,75 +209,102 @@ const App = () => {
 
   const getSignalColor = (signal) => {
     switch (signal) {
-      case 'BUY': return 'bg-green-600';
+      case 'BUY': return 'bg-emerald-600';
       case 'SELL': return 'bg-red-600';
-      case 'HOLD': return 'bg-yellow-600';
-      default: return 'bg-gray-600';
+      case 'HOLD': return 'bg-amber-600';
+      default: return 'bg-neutral-600';
     }
   };
 
+  const formatPrice = (price) => {
+    if (!price) return '0.00';
+    return price > 1 
+      ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : price.toFixed(8);
+  };
+
+  const getUpdateIntervalText = (seconds) => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950">
       {/* Header */}
-      <div className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm">
-        <div className="container mx-auto px-6 py-4">
+      <div className="border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <Activity className="w-8 h-8 text-yellow-400" />
-                <h1 className="text-2xl font-bold text-white">Binance Trader</h1>
+                <Activity className="w-6 h-6 text-emerald-400" />
+                <h1 className="text-xl font-bold text-white">Binance Trader</h1>
                 {settings.enable_ai_signals && (
-                  <Badge variant="outline" className="text-green-400 border-green-400">
+                  <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 bg-emerald-400/10">
                     <Bot className="w-3 h-3 mr-1" />
-                    AI ENABLED
+                    AI
                   </Badge>
                 )}
               </div>
-              <Badge variant={connected ? "default" : "destructive"} className="text-xs">
-                {connected ? `● LIVE ${lastUpdate}` : '● DISCONNECTED'}
+              <Badge variant={connected ? "default" : "destructive"} className={`text-xs ${connected ? 'bg-emerald-600' : 'bg-red-600'} animated-border`}>
+                {connected ? `● LIVE ${lastUpdate}` : '● OFFLINE'}
+              </Badge>
+              <Badge variant="outline" className="text-xs text-neutral-400 border-neutral-700">
+                <Clock className="w-3 h-3 mr-1" />
+                {getUpdateIntervalText(settings.price_update_interval)}
               </Badge>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <Badge variant="outline" className="text-slate-300 border-slate-600">
+            <div className="flex items-center space-x-2">
+              <Badge variant="outline" className="text-neutral-300 border-neutral-700 text-sm px-3">
                 Balance: $12,450.50
               </Badge>
+              <Button
+                onClick={refreshPrices}
+                disabled={refreshingPrices}
+                size="sm"
+                className="bg-neutral-700 hover:bg-neutral-600 text-white px-3"
+              >
+                <Refresh className={`w-4 h-4 ${refreshingPrices ? 'animate-spin' : ''}`} />
+              </Button>
               {settings.enable_ai_signals && (
                 <Button
                   onClick={generateAiSignals}
                   disabled={generatingSignals}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3"
                 >
-                  <Brain className="w-4 h-4 mr-2" />
-                  {generatingSignals ? 'Analyzing...' : 'AI Analyze'}
+                  <Brain className="w-4 h-4 mr-1" />
+                  {generatingSignals ? 'AI...' : 'AI'}
                 </Button>
               )}
               <Button
                 onClick={emergencySell}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold px-6"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 animated-border-red"
               >
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                EMERGENCY SELL
+                <AlertTriangle className="w-4 h-4 mr-1" />
+                EMERGENCY
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+      <div className="container mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           
-          {/* Crypto Pairs Overview */}
-          <div className="xl:col-span-1">
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center space-x-2">
-                  <Eye className="w-5 h-5" />
-                  <span>Market Overview</span>
+          {/* Market Overview */}
+          <div className="lg:col-span-1">
+            <Card className="bg-neutral-900/50 border-neutral-800 h-fit">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center space-x-2 text-sm">
+                  <Eye className="w-4 h-4" />
+                  <span>Markets</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="space-y-2">
                   {Object.entries(pairs).map(([key, pair]) => {
                     const signal = aiSignals[key];
                     const isSelected = key === selectedPair;
@@ -266,26 +313,23 @@ const App = () => {
                       <div 
                         key={key}
                         onClick={() => setSelectedPair(key)}
-                        className={`p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                        className={`p-2 rounded-lg cursor-pointer transition-all duration-200 ${
                           isSelected 
-                            ? 'bg-slate-600/50 border border-slate-500' 
-                            : 'bg-slate-700/30 hover:bg-slate-600/30'
+                            ? 'bg-neutral-800/80 border border-emerald-500/30 animated-border' 
+                            : 'bg-neutral-800/30 hover:bg-neutral-700/50'
                         }`}
                       >
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-center">
                           <div>
-                            <div className="text-white font-semibold text-sm">{pair.symbol}</div>
-                            <div className="text-slate-300 text-xs">
-                              ${pair.price?.toLocaleString(undefined, { 
-                                minimumFractionDigits: 2, 
-                                maximumFractionDigits: pair.price > 1 ? 2 : 8 
-                              })}
+                            <div className="text-white font-medium text-sm">{pair.symbol}</div>
+                            <div className="text-neutral-400 text-xs">
+                              ${formatPrice(pair.price)}
                             </div>
                           </div>
                           <div className="text-right">
                             <Badge
                               variant={pair.change >= 0 ? "default" : "destructive"}
-                              className={`text-xs ${pair.change >= 0 ? 'bg-green-600' : 'bg-red-600'} text-white`}
+                              className={`text-xs ${pair.change >= 0 ? 'bg-emerald-600' : 'bg-red-600'} text-white`}
                             >
                               {pair.change >= 0 ? '+' : ''}{pair.change?.toFixed(2)}%
                             </Badge>
@@ -294,8 +338,7 @@ const App = () => {
                                 <Badge 
                                   className={`text-xs ${getSignalColor(signal.signal)} text-white`}
                                 >
-                                  <Bot className="w-3 h-3 mr-1" />
-                                  {signal.signal} {signal.confidence}%
+                                  {signal.signal}
                                 </Badge>
                               </div>
                             )}
@@ -309,97 +352,54 @@ const App = () => {
             </Card>
           </div>
 
-          {/* Main Trading Panel */}
-          <div className="xl:col-span-2 space-y-6">
-            {/* Trading Controls */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center space-x-2">
-                  <DollarSign className="w-5 h-5" />
-                  <span>Trading Panel - {pairs[selectedPair]?.symbol}</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1">
-                    <Label className="text-slate-300">Market Type</Label>
-                    <div className="flex space-x-2 mt-2">
-                      <Button
-                        variant={marketType === 'spot' ? 'default' : 'outline'}
-                        onClick={() => setMarketType('spot')}
-                        className="flex-1"
-                      >
-                        ⚡ Spot
-                      </Button>
-                      <Button
-                        variant={marketType === 'futures' ? 'default' : 'outline'}
-                        onClick={() => setMarketType('futures')}
-                        className="flex-1"
-                      >
-                        ♾️ Futures
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+          {/* Trading Panel */}
+          <div className="lg:col-span-2 space-y-4">
             {/* Price Display */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardContent className="py-8">
+            <Card className="bg-neutral-900/50 border-neutral-800 animated-border">
+              <CardContent className="py-6">
                 <div className="text-center space-y-4">
-                  <h2 className="text-4xl font-mono font-bold text-white">
-                    ${currentPrice.toLocaleString(undefined, { 
-                      minimumFractionDigits: 2, 
-                      maximumFractionDigits: currentPrice > 1 ? 2 : 8 
-                    })}
-                  </h2>
+                  <div>
+                    <h2 className="text-3xl font-mono font-bold text-white">
+                      ${formatPrice(currentPrice)}
+                    </h2>
+                    <div className="text-neutral-400 text-sm">{pairs[selectedPair]?.symbol}</div>
+                  </div>
                   
-                  <div className="flex items-center justify-center space-x-6">
+                  <div className="flex items-center justify-center space-x-4">
                     <Badge
                       variant={priceChange >= 0 ? "default" : "destructive"}
-                      className={`text-lg px-4 py-2 ${priceChange >= 0 ? 'bg-green-600' : 'bg-red-600'} text-white`}
+                      className={`px-3 py-1 ${priceChange >= 0 ? 'bg-emerald-600' : 'bg-red-600'} text-white`}
                     >
-                      {priceChange >= 0 ? <TrendingUp className="w-4 h-4 mr-2" /> : <TrendingDown className="w-4 h-4 mr-2" />}
+                      {priceChange >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
                       {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
                     </Badge>
                     
                     {currentSignal && (
-                      <Badge className={`text-lg px-4 py-2 ${getSignalColor(currentSignal.signal)} text-white`}>
-                        <Bot className="w-4 h-4 mr-2" />
-                        AI: {currentSignal.signal} ({currentSignal.confidence}%)
+                      <Badge className={`px-3 py-1 ${getSignalColor(currentSignal.signal)} text-white`}>
+                        <Bot className="w-3 h-3 mr-1" />
+                        {currentSignal.signal} {currentSignal.confidence}%
                       </Badge>
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="grid grid-cols-3 gap-4 text-center text-sm">
                     <div>
-                      <div className="text-slate-400 text-sm">24h High</div>
-                      <div className="text-white font-semibold">
-                        ${currentPair?.high24h?.toLocaleString(undefined, { 
-                          minimumFractionDigits: 2, 
-                          maximumFractionDigits: currentPair?.high24h > 1 ? 2 : 8 
-                        })}
-                      </div>
+                      <div className="text-neutral-500">24h High</div>
+                      <div className="text-white font-mono">${formatPrice(currentPair?.high24h)}</div>
                     </div>
                     <div>
-                      <div className="text-slate-400 text-sm">Volume</div>
-                      <div className="text-white font-semibold">${volume.toLocaleString()}</div>
+                      <div className="text-neutral-500">Volume</div>
+                      <div className="text-white font-mono">${volume.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     </div>
                     <div>
-                      <div className="text-slate-400 text-sm">24h Low</div>
-                      <div className="text-white font-semibold">
-                        ${currentPair?.low24h?.toLocaleString(undefined, { 
-                          minimumFractionDigits: 2, 
-                          maximumFractionDigits: currentPair?.low24h > 1 ? 2 : 8 
-                        })}
-                      </div>
+                      <div className="text-neutral-500">24h Low</div>
+                      <div className="text-white font-mono">${formatPrice(currentPair?.low24h)}</div>
                     </div>
                   </div>
 
                   {currentSignal && (
-                    <div className="mt-4 p-3 bg-slate-700/50 rounded-lg">
-                      <div className="text-sm text-slate-300">AI Analysis:</div>
+                    <div className="mt-3 p-3 bg-neutral-800/50 rounded-lg text-left">
+                      <div className="text-xs text-neutral-400">AI Analysis:</div>
                       <div className="text-white text-sm mt-1">{currentSignal.analysis}</div>
                     </div>
                   )}
@@ -407,122 +407,151 @@ const App = () => {
               </CardContent>
             </Card>
 
-            {/* Buy/Sell Buttons */}
+            {/* Trading Controls */}
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-neutral-300 text-sm">Market Type</Label>
+                <div className="flex space-x-2">
+                  <Button
+                    variant={marketType === 'spot' ? 'default' : 'outline'}
+                    onClick={() => setMarketType('spot')}
+                    size="sm"
+                    className="flex-1 bg-neutral-700 hover:bg-neutral-600"
+                  >
+                    ⚡ Spot
+                  </Button>
+                  <Button
+                    variant={marketType === 'futures' ? 'default' : 'outline'}
+                    onClick={() => setMarketType('futures')}
+                    size="sm"
+                    className="flex-1 bg-neutral-700 hover:bg-neutral-600"
+                  >
+                    ♾️ Futures
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-neutral-300 text-sm">Amount (USDT)</Label>
+                <Input
+                  type="number"
+                  value={settings.trade_amount}
+                  onChange={(e) => updateSettings({...settings, trade_amount: parseFloat(e.target.value)})}
+                  className="bg-neutral-800 border-neutral-700 text-white text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Trading Buttons */}
+            <div className="grid grid-cols-2 gap-3">
               <Button
                 onClick={() => executeTrade('BUY')}
-                className="h-20 text-xl font-bold bg-green-600 hover:bg-green-700 text-white transform transition-all duration-200 hover:scale-105 shadow-lg"
+                className="h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white animated-border-green"
               >
-                <TrendingUp className="w-6 h-6 mr-2" />
-                BUY NOW
+                <TrendingUp className="w-4 h-4 mr-2" />
+                BUY
               </Button>
               <Button
                 onClick={() => executeTrade('SELL')}
-                className="h-20 text-xl font-bold bg-red-600 hover:bg-red-700 text-white transform transition-all duration-200 hover:scale-105 shadow-lg"
+                className="h-12 text-base font-bold bg-red-600 hover:bg-red-700 text-white animated-border-red"
               >
-                <TrendingDown className="w-6 h-6 mr-2" />
-                SELL NOW
+                <TrendingDown className="w-4 h-4 mr-2" />
+                SELL
               </Button>
             </div>
           </div>
 
-          {/* Settings & Info Panel */}
-          <div className="xl:col-span-1 space-y-6">
-            {/* Settings */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center space-x-2">
-                  <Settings className="w-5 h-5" />
+          {/* Settings Panel */}
+          <div className="lg:col-span-1 space-y-4">
+            <Card className="bg-neutral-900/50 border-neutral-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center space-x-2 text-sm">
+                  <Settings className="w-4 h-4" />
                   <span>Settings</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Tabs defaultValue="trading" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 bg-slate-700">
-                    <TabsTrigger value="trading" className="text-white">Trading</TabsTrigger>
-                    <TabsTrigger value="ai" className="text-white">AI Settings</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 bg-neutral-800">
+                    <TabsTrigger value="trading" className="text-white text-xs">Trading</TabsTrigger>
+                    <TabsTrigger value="ai" className="text-white text-xs">AI</TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="trading" className="space-y-4 mt-4">
-                    <div>
-                      <Label className="text-slate-300">Trade Amount (USDT)</Label>
-                      <Input
-                        type="number"
-                        value={settings.trade_amount}
-                        onChange={(e) => updateSettings({...settings, trade_amount: parseFloat(e.target.value)})}
-                        className="bg-slate-700 border-slate-600 text-white"
-                      />
-                    </div>
-                    
+                  <TabsContent value="trading" className="space-y-3 mt-4">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-slate-300 text-sm">Take Profit (%)</Label>
+                        <Label className="text-neutral-300 text-xs">Take Profit (%)</Label>
                         <Input
                           type="number"
                           value={settings.take_profit}
                           onChange={(e) => updateSettings({...settings, take_profit: parseFloat(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white"
+                          className="bg-neutral-800 border-neutral-700 text-white text-sm"
                         />
                       </div>
                       <div>
-                        <Label className="text-slate-300 text-sm">Stop Loss (%)</Label>
+                        <Label className="text-neutral-300 text-xs">Stop Loss (%)</Label>
                         <Input
                           type="number"
                           value={settings.stop_loss}
                           onChange={(e) => updateSettings({...settings, stop_loss: parseFloat(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white"
+                          className="bg-neutral-800 border-neutral-700 text-white text-sm"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <Label className="text-slate-300">Timeframe</Label>
-                      <Select value={settings.timeframe} onValueChange={(value) => updateSettings({...settings, timeframe: value})}>
-                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                      <Label className="text-neutral-300 text-xs">Update Interval</Label>
+                      <Select 
+                        value={settings.price_update_interval.toString()} 
+                        onValueChange={(value) => updateSettings({...settings, price_update_interval: parseInt(value)})}
+                      >
+                        <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white text-sm">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-slate-700 border-slate-600">
-                          <SelectItem value="1m" className="text-white">1 minute</SelectItem>
-                          <SelectItem value="5m" className="text-white">5 minutes</SelectItem>
-                          <SelectItem value="15m" className="text-white">15 minutes</SelectItem>
-                          <SelectItem value="1h" className="text-white">1 hour</SelectItem>
+                        <SelectContent className="bg-neutral-800 border-neutral-700">
+                          <SelectItem value="1" className="text-white">1 second</SelectItem>
+                          <SelectItem value="5" className="text-white">5 seconds</SelectItem>
+                          <SelectItem value="10" className="text-white">10 seconds</SelectItem>
+                          <SelectItem value="30" className="text-white">30 seconds</SelectItem>
+                          <SelectItem value="60" className="text-white">1 minute</SelectItem>
+                          <SelectItem value="300" className="text-white">5 minutes</SelectItem>
+                          <SelectItem value="900" className="text-white">15 minutes</SelectItem>
+                          <SelectItem value="3600" className="text-white">1 hour</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </TabsContent>
                   
-                  <TabsContent value="ai" className="space-y-4 mt-4">
+                  <TabsContent value="ai" className="space-y-3 mt-4">
                     <div className="flex items-center space-x-2">
                       <Switch
                         checked={settings.enable_ai_signals}
                         onCheckedChange={(checked) => updateSettings({...settings, enable_ai_signals: checked})}
                       />
-                      <Label className="text-slate-300">Enable AI Signals</Label>
+                      <Label className="text-neutral-300 text-xs">Enable AI</Label>
                     </div>
                     
                     <div>
-                      <Label className="text-slate-300">OpenAI API Key</Label>
+                      <Label className="text-neutral-300 text-xs">API Key</Label>
                       <Input
                         type="password"
                         placeholder="sk-..."
                         value={settings.openai_api_key === '***HIDDEN***' ? '' : settings.openai_api_key}
                         onChange={(e) => updateSettings({...settings, openai_api_key: e.target.value})}
-                        className="bg-slate-700 border-slate-600 text-white"
+                        className="bg-neutral-800 border-neutral-700 text-white text-sm"
                       />
                     </div>
                     
                     <div>
-                      <Label className="text-slate-300">AI Model</Label>
+                      <Label className="text-neutral-300 text-xs">Model</Label>
                       <Select value={settings.ai_model} onValueChange={(value) => updateSettings({...settings, ai_model: value})}>
-                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                        <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white text-sm">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectContent className="bg-neutral-800 border-neutral-700">
                           <SelectItem value="gpt-4o" className="text-white">GPT-4o</SelectItem>
                           <SelectItem value="gpt-4.1" className="text-white">GPT-4.1</SelectItem>
-                          <SelectItem value="o1" className="text-white">O1</SelectItem>
-                          <SelectItem value="claude-sonnet-4-20250514" className="text-white">Claude Sonnet 4</SelectItem>
-                          <SelectItem value="gemini-2.0-flash" className="text-white">Gemini 2.0 Flash</SelectItem>
+                          <SelectItem value="claude-sonnet-4-20250514" className="text-white">Claude</SelectItem>
+                          <SelectItem value="gemini-2.0-flash" className="text-white">Gemini</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -532,33 +561,33 @@ const App = () => {
             </Card>
 
             {/* Recent Trades */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">Recent Trades</CardTitle>
+            <Card className="bg-neutral-900/50 border-neutral-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white text-sm">Recent Trades</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {trades.slice(0, 5).map((trade, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 bg-slate-700/50 rounded">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {trades.slice(0, 3).map((trade, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-neutral-800/30 rounded text-sm">
                       <div>
-                        <span className="text-white text-sm font-medium">{trade.pair}</span>
-                        <span className={`ml-2 text-xs ${trade.side === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className="text-white font-medium">{trade.pair}</span>
+                        <span className={`ml-2 text-xs ${trade.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>
                           {trade.side}
                         </span>
                         {trade.ai_signal && (
-                          <div className="text-xs text-blue-400 mt-1">
+                          <div className="text-xs text-emerald-400 mt-1">
                             AI: {trade.ai_signal}
                           </div>
                         )}
                       </div>
                       <div className="text-right">
                         <div className="text-white text-sm">${trade.price.toFixed(2)}</div>
-                        <div className="text-slate-400 text-xs">${trade.amount}</div>
+                        <div className="text-neutral-400 text-xs">${trade.amount}</div>
                       </div>
                     </div>
                   ))}
                   {trades.length === 0 && (
-                    <div className="text-slate-400 text-center py-4">No trades yet</div>
+                    <div className="text-neutral-400 text-center py-4 text-sm">No trades yet</div>
                   )}
                 </div>
               </CardContent>
