@@ -18,7 +18,13 @@ timeout /t 2 /nobreak >nul
 REM Start backend server
 echo Starting backend server on port 8001...
 cd /d "%~dp0backend"
-start "Binance Trader Backend" cmd /k "call venv\Scripts\activate && python server.py"
+if exist "venv\Scripts\activate.bat" (
+    start "Binance Trader Backend" cmd /k "call venv\Scripts\activate.bat && python server.py"
+) else (
+    echo ERROR: Virtual environment not found. Please run setup_windows.bat first.
+    pause
+    exit /b 1
+)
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul
