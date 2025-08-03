@@ -6,7 +6,13 @@ cd /d "%~dp0"
 
 REM Start backend server (hidden)
 cd /d "%~dp0backend"
-start /min "" cmd /c "call venv\Scripts\activate && python server.py"
+if exist "venv\Scripts\activate.bat" (
+    start /min "" cmd /c "call venv\Scripts\activate.bat && python server.py"
+) else (
+    echo ERROR: Virtual environment not found. Please run setup_windows.bat first.
+    pause
+    exit /b 1
+)
 
 REM Wait a moment for backend to start
 timeout /t 3 /nobreak >nul 2>&1
