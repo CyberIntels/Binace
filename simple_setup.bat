@@ -1,13 +1,17 @@
 @echo off
 echo ====================================
-echo   Binance Trader - Simple Setup
+echo   Binance Trader - Установка
 echo ====================================
 echo.
 
 REM Check if we're in the right directory
 if not exist "backend\server.py" (
-    echo ERROR: Please run this script from the Binance Trader root directory
-    echo Make sure you can see backend\ and frontend\ folders
+    echo ❌ ОШИБКА: Неправильная папка!
+    echo.
+    echo Пожалуйста запустите этот файл из папки где есть:
+    echo - папка backend\
+    echo - папка frontend\
+    echo.
     pause
     exit /b 1
 )
