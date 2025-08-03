@@ -96,6 +96,33 @@ class BinanceTradingAPITester:
         """Test emergency sell functionality"""
         return self.run_test("Emergency Sell", "POST", "api/emergency-sell", 200)
 
+    def test_get_all_pairs_with_signals(self):
+        """Test getting all pairs with AI signals"""
+        return self.run_test("Get All Pairs with Signals", "GET", "api/pairs/all", 200)
+
+    def test_get_ai_signals(self):
+        """Test getting AI signals"""
+        return self.run_test("Get AI Signals", "GET", "api/ai-signals", 200)
+
+    def test_generate_ai_signals_without_key(self):
+        """Test generating AI signals without API key (should fail)"""
+        return self.run_test("Generate AI Signals (No Key)", "POST", "api/generate-ai-signals", 400)
+
+    def test_ai_settings_update(self):
+        """Test updating AI-related settings"""
+        ai_settings = {
+            "trade_amount": 500,
+            "take_profit": 10,
+            "stop_loss": 3,
+            "timeframe": "5m",
+            "activation_distance": 1.5,
+            "openai_api_key": "test-key-123",
+            "ai_model": "gpt-4o",
+            "ai_provider": "openai",
+            "enable_ai_signals": True
+        }
+        return self.run_test("Update AI Settings", "POST", "api/settings", 200, data=ai_settings)
+
 def main():
     print("🚀 Starting Binance Trading API Tests")
     print("=" * 50)
