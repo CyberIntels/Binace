@@ -44,18 +44,35 @@ REM Create virtual environment for backend
 echo Creating Python virtual environment...
 cd /d "%~dp0backend"
 if not exist "venv" (
+    echo Creating new virtual environment...
     python -m venv venv
+    if %errorlevel% neq 0 (
+        echo ERROR: Failed to create virtual environment
+        pause
+        exit /b 1
+    )
 )
 
 REM Activate virtual environment and install requirements
 echo Installing Python dependencies...
-call venv\Scripts\activate
-pip install --upgrade pip
-pip install -r requirements.txt
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install Python dependencies
+if exist "venv\Scripts\activate.bat" (
+    call venv\Scripts\activate.bat
+) else (
+    echo ERROR: Virtual environment activation script not found
     pause
     exit /b 1
+)
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to install Python dependencies
+    echo Trying alternative installation...
+    pip install -r requirements.txt
+    if %errorlevel% neq 0 (
+        echo ERROR: Alternative installation also failed
+        pause
+        exit /b 1
+    )
 )
 
 REM Install frontend dependencies
